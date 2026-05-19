@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 
 from automation.models import Digest
-from automation.renderers.markdown import _pick_highlights
+from automation.renderers.markdown import _journal_badge, _pick_highlights
 from automation.utils import format_date_time, safe_join
 
 
@@ -53,6 +53,9 @@ ul{padding-left:20px}.warning{background:#fff8e1;border-color:#ffe3a3}.footer{co
             body.append(f" 发布时间：{html.escape(format_date_time(article.published_at))}")
             if article.journal:
                 body.append(f"｜{html.escape(article.journal)}")
+            journal_badge = _journal_badge(article)
+            if journal_badge:
+                body.append(f"｜{html.escape(journal_badge)}")
             authors = safe_join(article.authors, limit=4)
             if authors:
                 body.append(f"｜作者：{html.escape(authors)}")

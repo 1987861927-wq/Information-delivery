@@ -49,6 +49,10 @@ class Article:
     topics: list[str] = field(default_factory=list)
     is_preprint: bool = False
     journal: str | None = None
+    journal_impact_factor: float | None = None
+    journal_tier: str | None = None
+    journal_is_whitelisted: bool = False
+    journal_filter_reason: str | None = None
     relevance_score: float = 0.0
     quality_score: float = 0.0
 

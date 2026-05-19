@@ -1,5 +1,8 @@
 name: Daily Research Digest
 
+run-name: >-
+  Daily Research Digest · ${{ github.event_name }} · ${{ inputs.digest_date || 'auto-date' }} · ${{ inputs.topics || 'all-topics' }}
+
 on:
   schedule:
     # GitHub Actions 使用 UTC；00:00 UTC 约等于北京时间 08:00。
@@ -29,6 +32,19 @@ on:
         type: boolean
       skip_email:
         description: "跳过邮件推送"
+        required: false
+        default: false
+        type: boolean
+      top_journal_mode:
+        description: "top 期刊筛选模式：off/rank/push/fetch-and-push；留空使用 config/sources.yml"
+        required: false
+        type: string
+      min_impact_factor:
+        description: "top 期刊最小 IF 阈值；留空使用 config/sources.yml，常用 10"
+        required: false
+        type: string
+      keep_unknown_if:
+        description: "top 期刊 push 模式下保留未知 IF 内容，例如预印本"
         required: false
         default: false
         type: boolean
@@ -83,36 +99,88 @@ jobs:
       - name: Build CLI arguments
         id: args
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DIGEST_DATE: ${{ inputs.digest_date }}
+          INPUT_TOPICS: ${{ inputs.topics }}
+          INPUT_MAX_ITEMS: ${{ inputs.max_items }}
+          INPUT_DAYS_BACK: ${{ inputs.days_back }}
+          INPUT_SKIP_TELEGRAM: ${{ inputs.skip_telegram }}
+          INPUT_SKIP_EMAIL: ${{ inputs.skip_email }}
+          INPUT_TOP_JOURNAL_MODE: ${{ inputs.top_journal_mode }}
+          INPUT_MIN_IMPACT_FACTOR: ${{ inputs.min_impact_factor }}
+          INPUT_KEEP_UNKNOWN_IF: ${{ inputs.keep_unknown_if }}
+          INPUT_PREVIEW: ${{ inputs.preview }}
         run: |
           set -euo pipefail
           ARGS=""
-          if [ -n "${{ inputs.digest_date }}" ]; then
-            ARGS="$ARGS --date '${{ inputs.digest_date }}'"
+          if [ -n "$INPUT_DIGEST_DATE" ]; then
+            ARGS="$ARGS --date '$INPUT_DIGEST_DATE'"
           fi
-          if [ -n "${{ inputs.topics }}" ]; then
-            ARGS="$ARGS --topics ${{ inputs.topics }}"
+          if [ -n "$INPUT_TOPICS" ]; then
+            ARGS="$ARGS --topics $INPUT_TOPICS"
           fi
-          if [ -n "${{ inputs.max_items }}" ]; then
-            ARGS="$ARGS --max-items '${{ inputs.max_items }}'"
+          if [ -n "$INPUT_MAX_ITEMS" ]; then
+            ARGS="$ARGS --max-items '$INPUT_MAX_ITEMS'"
           fi
-          if [ -n "${{ inputs.days_back }}" ]; then
-            ARGS="$ARGS --days-back '${{ inputs.days_back }}'"
+          if [ -n "$INPUT_DAYS_BACK" ]; then
+            ARGS="$ARGS --days-back '$INPUT_DAYS_BACK'"
           fi
-          if [ "${{ inputs.skip_telegram }}" = "true" ]; then
+          if [ -n "$INPUT_TOP_JOURNAL_MODE" ]; then
+            ARGS="$ARGS --top-journal-mode '$INPUT_TOP_JOURNAL_MODE'"
+          fi
+          if [ -n "$INPUT_MIN_IMPACT_FACTOR" ]; then
+            ARGS="$ARGS --min-impact-factor '$INPUT_MIN_IMPACT_FACTOR'"
+          fi
+          if [ "$INPUT_KEEP_UNKNOWN_IF" = "true" ]; then
+            ARGS="$ARGS --keep-unknown-if"
+          fi
+          if [ "$INPUT_SKIP_TELEGRAM" = "true" ]; then
             ARGS="$ARGS --skip-telegram"
           fi
-          if [ "${{ inputs.skip_email }}" = "true" ]; then
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$INPUT_SKIP_EMAIL" = "true" ]; then
             ARGS="$ARGS --skip-email"
           fi
-          if [ "${{ inputs.preview }}" = "true" ]; then
+          if [ "$INPUT_PREVIEW" = "true" ]; then
             ARGS="$ARGS --preview"
           fi
           echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Daily Research Digest arguments"
+            echo "- event: $EVENT_NAME"
+            echo "- schedule default: Telegram push enabled, email skipped unless manually triggered"
+            echo "- args: \`$ARGS\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate and push digest
         run: |
           set -euo pipefail
           python scripts/daily_digest.py ${{ steps.args.outputs.args }} --verbose
+
+      - name: Notify Telegram on workflow failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "缺少 Telegram secret，跳过失败告警"
+            exit 0
+          fi
+          python - <<'PY'
+          import os
+          import requests
+
+          text = f"⚠️ 科研情报日报 GitHub Actions 失败\n{os.environ['RUN_URL']}"
+          response = requests.post(
+              f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage",
+              json={"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": text, "disable_web_page_preview": True},
+              timeout=30,
+          )
+          response.raise_for_status()
+          PY
 
       - name: List generated digests
         if: always()

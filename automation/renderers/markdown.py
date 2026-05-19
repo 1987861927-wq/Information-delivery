@@ -66,6 +66,9 @@ def render_telegram_preview(digest: Digest, max_items: int = 8) -> str:
             summary = item.summary
             conclusion = _first_non_empty(summary.key_conclusions) or "暂无明确关键结论，建议打开原文核对。"
             lines.append(f"{count}. {item.article.title}")
+            journal_badge = _journal_badge(item.article)
+            if journal_badge:
+                lines.append(f"   期刊标记：{journal_badge}")
             lines.append(f"   精炼总结：{_truncate_line(summary.brief, 150)}")
             lines.append(f"   关键结论：{_truncate_line(conclusion, 130)}")
             lines.append(f"   价值判断：{_truncate_line(summary.value_judgement, 120)}")
@@ -100,10 +103,12 @@ def _render_item(index: int, item: DigestItem) -> list[str]:
     article = item.article
     summary = item.summary
     authors = safe_join(article.authors, limit=4)
+    journal_badge = _journal_badge(article)
     lines = [
         f"### {index}. {article.title}",
         "",
         f"- 来源：{article.source}{' / ' + article.journal if article.journal else ''}",
+        f"- 期刊标记：{journal_badge or '未匹配 top 期刊 IF'}",
         f"- 发布时间：{format_date_time(article.published_at)}",
         f"- 作者：{authors or '未知'}",
         f"- 原文链接：{article.url}",
@@ -128,10 +133,23 @@ def _render_item(index: int, item: DigestItem) -> list[str]:
     return lines
 
 
+def _journal_badge(article) -> str:
+    parts: list[str] = []
+    if article.journal_impact_factor is not None:
+        parts.append(f"IF≈{article.journal_impact_factor:g}")
+    if article.journal_tier:
+        parts.append(article.journal_tier)
+    if article.journal_is_whitelisted:
+        parts.append("白名单")
+    if article.journal_filter_reason:
+        parts.append(article.journal_filter_reason)
+    return "；".join(parts)
+
+
 def _pick_highlights(digest: Digest) -> list[DigestItem]:
     all_items = [item for items in digest.items_by_topic.values() for item in items]
     all_items.sort(
-        key=lambda item: (item.article.relevance_score, item.article.quality_score),
+        key=lambda item: (item.article.relevance_score, item.article.quality_score, item.article.journal_impact_factor or 0),
         reverse=True,
     )
     return all_items[:3]

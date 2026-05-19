@@ -65,6 +65,28 @@ def load_sources_config(path: str | Path = "config/sources.yml") -> dict[str, An
     return sources
 
 
+def load_journal_catalog(path: str | Path = "config/journals.yml") -> list[dict[str, Any]]:
+    data = _read_yaml(Path(path))
+    journals = data.get("journals") or []
+    if not isinstance(journals, list):
+        raise ConfigError("journals.yml 必须包含 journals 列表")
+    normalized: list[dict[str, Any]] = []
+    for raw in journals:
+        if not isinstance(raw, dict):
+            raise ConfigError("journals.yml 中每个 journal 必须是对象")
+        normalized.append(
+            {
+                "name": str(raw["name"]),
+                "aliases": [str(item) for item in raw.get("aliases", [])],
+                "impact_factor": float(raw.get("impact_factor", 0.0) or 0.0),
+                "tier": str(raw.get("tier", "") or "") or None,
+                "topics": [str(item) for item in raw.get("topics", [])],
+                "whitelist": bool(raw.get("whitelist", True)),
+            }
+        )
+    return normalized
+
+
 def filter_topics(topics: list[TopicConfig], selected_slugs: list[str] | None) -> list[TopicConfig]:
     if not selected_slugs:
         return topics

@@ -33,7 +33,11 @@ def collect_pubmed(
     articles: list[Article] = []
     for topic in topics:
         term = topic.pubmed_query or " OR ".join(topic.keywords)
-        term = f"({term}) AND {pubmed_date_range(start_date, end_date)}"
+        journal_query = str(source_config.get("journal_query", "") or "").strip()
+        if journal_query:
+            term = f"({term}) AND {journal_query} AND {pubmed_date_range(start_date, end_date)}"
+        else:
+            term = f"({term}) AND {pubmed_date_range(start_date, end_date)}"
         ids = _search_pubmed(term=term, retmax=retmax, email=email, api_key=api_key)
         LOGGER.info("PubMed topic=%s ids=%s", topic.slug, len(ids))
         if ids:

@@ -14,10 +14,25 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from automation.collectors import collect_arxiv, collect_biorxiv, collect_medrxiv, collect_pubmed, collect_rss
-from automation.config_loader import filter_topics, load_environment, load_sources_config, load_topics_config
+from automation.config_loader import (
+    filter_topics,
+    load_environment,
+    load_journal_catalog,
+    load_sources_config,
+    load_topics_config,
+)
 from automation.models import Article, Digest, DigestItem, SourceError
 from automation.notifiers import send_email, send_telegram_message
-from automation.processing import assign_topics_and_scores, dedupe_articles, select_items_by_topic
+from automation.processing import (
+    annotate_journal_metadata,
+    apply_top_journal_filter,
+    assign_topics_and_scores,
+    build_pubmed_journal_query,
+    compute_quality_score,
+    dedupe_articles,
+    normalize_top_journal_filter_mode,
+    select_items_by_topic,
+)
 from automation.renderers import render_html, render_markdown, render_telegram_preview
 from automation.summarizer import summarize_article
 from automation.utils import make_since_date, resolve_digest_date, setup_logging, utc_now
@@ -34,6 +49,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--topics-config", default="config/topics.yml", help="主题配置文件路径")
     parser.add_argument("--sources-config", default="config/sources.yml", help="数据源配置文件路径")
     parser.add_argument("--output-dir", default=None, help="日报输出目录，默认 data/digests")
+    parser.add_argument("--journals-config", default=None, help="期刊 IF/白名单配置文件路径，默认读取 sources.yml")
+    parser.add_argument(
+        "--top-journal-mode",
+        choices=["off", "rank", "push", "fetch-and-push"],
+        default=None,
+        help="覆盖 top 期刊筛选模式：off/rank/push/fetch-and-push",
+    )
+    parser.add_argument("--min-impact-factor", type=float, default=None, help="覆盖 top 期刊最小 IF 阈值，例如 10")
+    parser.add_argument("--keep-unknown-if", action="store_true", help="top 期刊 push 模式下保留未知 IF 内容")
     parser.add_argument("--skip-telegram", action="store_true", help="跳过 Telegram 推送")
     parser.add_argument("--skip-email", action="store_true", help="跳过邮件推送")
     parser.add_argument("--preview", action="store_true", help="只打印 Telegram 预览，不发送推送")
@@ -52,6 +76,8 @@ def main() -> int:
         digest_config, topics = load_topics_config(args.topics_config)
         sources_config = load_sources_config(args.sources_config)
         topics = filter_topics(topics, args.topics)
+        top_journal_filter = _resolve_top_journal_filter_config(sources_config, args)
+        journal_catalog = load_journal_catalog(top_journal_filter["journal_catalog"])
         target_date = resolve_digest_date(args.digest_date, digest_config.timezone)
         days_back = args.days_back or digest_config.default_days_back
         start_date = make_since_date(target_date, days_back)
@@ -67,10 +93,24 @@ def main() -> int:
                 start_date=start_date,
                 end_date=target_date,
                 sources_config=sources_config,
+                journal_catalog=journal_catalog,
+                top_journal_filter=top_journal_filter,
             )
 
         LOGGER.info("采集完成 raw_articles=%s source_errors=%s", len(articles), len(source_errors))
         articles = assign_topics_and_scores(articles, topics)
+        articles = annotate_journal_metadata(articles, journal_catalog)
+        for article in articles:
+            article.quality_score = compute_quality_score(article)
+        before_top_filter = len(articles)
+        articles = apply_top_journal_filter(articles, top_journal_filter)
+        LOGGER.info(
+            "top 期刊筛选完成 mode=%s min_if=%s before=%s after=%s",
+            top_journal_filter["mode"],
+            top_journal_filter["min_impact_factor"],
+            before_top_filter,
+            len(articles),
+        )
         articles = dedupe_articles(articles)
         LOGGER.info("去重和主题匹配完成 articles=%s", len(articles))
         selected = select_items_by_topic(
@@ -135,9 +175,20 @@ def collect_all_sources(
     start_date: date,
     end_date: date,
     sources_config: dict,
+    journal_catalog: list[dict],
+    top_journal_filter: dict,
 ) -> tuple[list[Article], list[SourceError]]:
+    pubmed_config = dict(sources_config.get("pubmed", {}))
+    if top_journal_filter["mode"] == "fetch-and-push":
+        journal_query = build_pubmed_journal_query(
+            journal_catalog=journal_catalog,
+            min_impact_factor=float(top_journal_filter["min_impact_factor"]),
+        )
+        if journal_query:
+            pubmed_config["journal_query"] = journal_query
+            LOGGER.info("PubMed 将追加 top 期刊检索边界 journal_terms=%s", journal_query.count("[Journal]"))
     collectors = [
-        ("PubMed", collect_pubmed, sources_config.get("pubmed", {})),
+        ("PubMed", collect_pubmed, pubmed_config),
         ("arXiv", collect_arxiv, sources_config.get("arxiv", {})),
         ("RSS", collect_rss, sources_config.get("rss", {})),
         ("bioRxiv", collect_biorxiv, sources_config.get("biorxiv", {})),
@@ -182,6 +233,7 @@ def _sample_articles(target_date: date) -> list[Article]:
             url="https://pubmed.ncbi.nlm.nih.gov/",
             published_at=datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc),
             topics=["neuroscience"],
+            journal="Nature Neuroscience",
             relevance_score=3,
             quality_score=1.0,
         ),
@@ -194,10 +246,26 @@ def _sample_articles(target_date: date) -> list[Article]:
             published_at=datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc),
             topics=["biomaterials", "orthopedics"],
             is_preprint=True,
+            journal="bioRxiv",
             relevance_score=4,
             quality_score=0.9,
         ),
     ]
+
+
+def _resolve_top_journal_filter_config(sources_config: dict, args: argparse.Namespace) -> dict:
+    raw = dict(sources_config.get("top_journal_filter", {}) or {})
+    mode = args.top_journal_mode or raw.get("mode", "off")
+    min_impact_factor = args.min_impact_factor if args.min_impact_factor is not None else raw.get("min_impact_factor", 10)
+    keep_unknown_if = bool(raw.get("keep_unknown_if", False)) or bool(args.keep_unknown_if)
+    journal_catalog = args.journals_config or raw.get("journal_catalog") or "config/journals.yml"
+    return {
+        "mode": normalize_top_journal_filter_mode(str(mode)),
+        "min_impact_factor": float(min_impact_factor or 10),
+        "journal_catalog": str(journal_catalog),
+        "keep_unknown_if": keep_unknown_if,
+        "keep_unknown_if_sources": [str(item) for item in raw.get("keep_unknown_if_sources", [])],
+    }
 
 
 def _json_safe_digest(digest: Digest) -> dict:

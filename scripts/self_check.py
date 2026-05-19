@@ -15,10 +15,28 @@ def run(command: list[str]) -> None:
 
 def main() -> int:
     run([sys.executable, "scripts/daily_digest.py", "--no-fetch", "--preview", "--skip-telegram", "--skip-email", "--date", "2026-01-01"])
+    run(
+        [
+            sys.executable,
+            "scripts/daily_digest.py",
+            "--no-fetch",
+            "--preview",
+            "--skip-telegram",
+            "--skip-email",
+            "--date",
+            "2026-01-02",
+            "--top-journal-mode",
+            "push",
+            "--min-impact-factor",
+            "10",
+        ]
+    )
     expected = PROJECT_ROOT / "data" / "digests" / "2026-01-01" / "digest.md"
-    if not expected.exists():
-        raise SystemExit(f"自检失败：未生成 {expected}")
-    print(f"自检通过：已生成 {expected}")
+    expected_top_journal = PROJECT_ROOT / "data" / "digests" / "2026-01-02" / "digest.md"
+    for path in (expected, expected_top_journal):
+        if not path.exists():
+            raise SystemExit(f"自检失败：未生成 {path}")
+    print(f"自检通过：已生成 {expected} 和 {expected_top_journal}")
     return 0
 
 

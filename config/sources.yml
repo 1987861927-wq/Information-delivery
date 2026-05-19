@@ -1,4 +1,17 @@
 sources:
+  top_journal_filter:
+    # mode:
+    # - off: 不使用 IF/top 期刊逻辑。
+    # - rank: 默认安全模式；不硬过滤，只给 top 期刊更高排序权重并在日报中展示 IF。
+    # - push: 抓取后只保留 IF >= min_impact_factor 或配置允许保留的未知 IF 来源。
+    # - fetch-and-push: PubMed 抓取阶段追加 top 期刊 Journal 检索式，随后再执行 push 过滤。
+    mode: rank
+    min_impact_factor: 10
+    journal_catalog: config/journals.yml
+    keep_unknown_if: false
+    # arXiv/bioRxiv/medRxiv 通常没有正式期刊 IF；如希望 top 期刊过滤时仍保留预印本，可列入此处。
+    keep_unknown_if_sources: []
+
   pubmed:
     enabled: true
     retmax_per_topic: 20

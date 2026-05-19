@@ -12,12 +12,24 @@ from automation.models import Article, ArticleSummary, TopicConfig
 from automation.utils import truncate_text
 
 LOGGER = logging.getLogger(__name__)
+_SUMMARIZER_MODE_LOGGED = False
 
 
 def summarize_article(article: Article, topics: list[TopicConfig]) -> ArticleSummary:
+    global _SUMMARIZER_MODE_LOGGED
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
+        if not _SUMMARIZER_MODE_LOGGED:
+            LOGGER.info("未配置 OPENAI_API_KEY，使用规则中文摘要兜底")
+            _SUMMARIZER_MODE_LOGGED = True
         return rule_based_summary(article)
+    if not _SUMMARIZER_MODE_LOGGED:
+        LOGGER.info(
+            "使用 OpenAI 兼容 LLM 摘要 base_url=%s model=%s",
+            os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+            os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        )
+        _SUMMARIZER_MODE_LOGGED = True
     try:
         return llm_summary(article=article, topics=topics, api_key=api_key)
     except Exception as exc:  # noqa: BLE001

@@ -38,7 +38,8 @@ research-intelligence-ios/
 │   └── utils.py                         # 日志、日期、文本工具
 ├── config/
 │   ├── topics.yml                       # 主题、关键词、推送时间等配置
-│   └── sources.yml                      # 数据源和 RSS Feed 配置
+│   ├── sources.yml                      # 数据源、RSS Feed 和 top 期刊筛选策略
+│   └── journals.yml                     # 本地维护的 top 期刊 IF/白名单目录
 ├── scripts/
 │   ├── daily_digest.py                  # 本地和 Actions 主入口
 │   └── self_check.py                    # 最小自检脚本
@@ -92,6 +93,21 @@ config/sources.yml
 - bioRxiv/medRxiv API 偶尔可能超时或返回不稳定，单源失败不会导致整个日报失败，会在日报中写入异常提示。
 - RSS 源可以自由增加，只需要填写 `name`、`url`、`topics`。
 
+### 3.1 top 期刊和 IF 筛选
+
+当前支持基于本地期刊目录进行 top 期刊优先排序或硬过滤：
+
+- `config/sources.yml` 中的 `top_journal_filter` 控制策略。
+- `config/journals.yml` 维护期刊名称、别名、近似 IF、分层标签和白名单。
+- 默认 `mode=rank`：不硬过滤，只给 IF 较高或白名单期刊更高排序权重，并在日报中展示 `IF≈xx`。
+- `mode=push`：抓取后只保留 `impact_factor >= min_impact_factor` 的期刊内容；未知 IF 内容默认排除。
+- `mode=fetch-and-push`：PubMed 抓取阶段追加 top 期刊 Journal 检索式，然后再执行 `push` 过滤。
+- `mode=off`：关闭 top 期刊逻辑。
+
+建议先使用默认 `rank` 观察真实日报质量；确认期刊目录覆盖足够后，再手动运行 `push` 或 `fetch-and-push`。
+
+注意：期刊 IF 每年变化，精确官方 IF 可能需要授权数据；当前 `config/journals.yml` 是可审计、可维护的近似过滤表，适合 MVP 筛选边界，不应视为官方 JCR 数据源。
+
 ## 4. 本地运行
 
 ### 4.1 安装依赖
@@ -140,6 +156,32 @@ python scripts/daily_digest.py --topics ai neuroscience --max-items 3 --preview
 python scripts/daily_digest.py --date 2026-05-19 --days-back 2 --preview
 ```
 
+### 4.7 本地验证 top 期刊筛选
+
+仅本地样例数据，不访问外部数据源：
+
+```bash
+python scripts/daily_digest.py --no-fetch --preview --skip-telegram --skip-email --top-journal-mode push --min-impact-factor 10
+```
+
+真实抓取但不推送，观察 IF 标记和筛选结果：
+
+```bash
+python scripts/daily_digest.py --preview --skip-telegram --skip-email --top-journal-mode rank --min-impact-factor 10
+```
+
+只推送 IF 大于等于 10 的内容，可使用：
+
+```bash
+python scripts/daily_digest.py --top-journal-mode push --min-impact-factor 10 --skip-email
+```
+
+如果希望 PubMed 抓取阶段就限制 top 期刊，可使用：
+
+```bash
+python scripts/daily_digest.py --top-journal-mode fetch-and-push --min-impact-factor 10 --skip-email
+```
+
 ## 5. 摘要模式
 
 ### 5.1 无大模型 API Key
@@ -157,6 +199,12 @@ python scripts/daily_digest.py --date 2026-05-19 --days-back 2 --preview
 
 ### 5.2 配置 OpenAI 或兼容接口
 
+`scripts/daily_digest.py` 会在生成每条内容摘要时调用 `automation/summarizer.py`：
+
+- 未配置 `OPENAI_API_KEY`：使用规则中文摘要，并在日志中输出“未配置 OPENAI_API_KEY，使用规则中文摘要兜底”。
+- 已配置 `OPENAI_API_KEY`：调用 OpenAI 兼容 Chat Completions 接口。
+- LLM 请求失败、超时、接口返回非 JSON 或模型输出字段不完整：自动回退规则摘要，并把失败原因写入局限性提示。
+
 设置环境变量：
 
 ```text
@@ -173,7 +221,13 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-如果使用兼容 OpenAI Chat Completions 的服务，可以修改 `OPENAI_BASE_URL` 和 `OPENAI_MODEL`。
+如果使用兼容 OpenAI Chat Completions 的服务，可以修改 `OPENAI_BASE_URL` 和 `OPENAI_MODEL`。兼容服务必须支持：
+
+```text
+POST {OPENAI_BASE_URL}/chat/completions
+```
+
+并且模型需要能够稳定输出 JSON object。
 
 脚本要求模型输出严格 JSON，并包含：
 
@@ -184,6 +238,8 @@ OPENAI_MODEL=gpt-4o-mini
 - `limitations`
 
 如果 LLM 失败，会自动回退到规则摘要，并在日志中提示。
+
+本地运行时可写入 `.env`；GitHub Actions 运行时配置为 repository secrets。不要把真实 API Key 写入仓库或 artifact。
 
 ## 6. 创建 Telegram Bot
 
@@ -352,6 +408,18 @@ NCBI_API_KEY
 
 如果暂时只想用 Telegram，可以不配置 SMTP；如果只想用邮件，可以在手动触发时勾选跳过 Telegram。
 
+### top 期刊筛选无需 Secrets
+
+`top_journal_filter` 使用仓库中的 `config/sources.yml` 和 `config/journals.yml`，不需要配置 GitHub Secrets。手动触发 Actions 时可以填写：
+
+```text
+top_journal_mode=rank
+top_journal_mode=push
+top_journal_mode=fetch-and-push
+min_impact_factor=10
+keep_unknown_if=false
+```
+
 ## 10. GitHub Actions 自动运行
 
 Workflow 文件：
@@ -368,13 +436,21 @@ Workflow 文件：
 
 GitHub Actions 使用 UTC，`00:00 UTC` 约等于北京时间 `08:00`。
 
+定时任务的默认策略：
+
+- 自动抓取真实数据。
+- 自动推送 Telegram。
+- 自动追加 `--skip-email`，避免 SMTP 未配置时影响 Telegram-only MVP。
+- 使用 `config/sources.yml` 中的 top 期刊策略，默认 `rank`。
+- 如果 workflow 失败，并且 Telegram secrets 已配置，会额外发送一条失败告警消息，包含 Actions run 链接。
+
 Workflow 支持手动触发：
 
 1. 打开 GitHub 仓库。
 2. 进入 Actions。
 3. 选择 `Daily Research Digest`。
 4. 点击 `Run workflow`。
-5. 可选填写日期、主题、最大条目数。
+5. 可选填写日期、主题、最大条目数、top 期刊模式和 IF 阈值。
 6. 点击运行。
 
 运行完成后，在 workflow 的 artifact 中可以下载：
@@ -382,6 +458,44 @@ Workflow 支持手动触发：
 - `digest.md`
 - `digest.html`
 - `digest.json`
+
+### 10.1 推荐 Actions 验证参数
+
+Telegram-only 定时等价验证：
+
+```text
+preview=false
+skip_telegram=false
+skip_email=true
+top_journal_mode=rank
+min_impact_factor=10
+```
+
+只验证 top 期刊硬过滤，不发推送：
+
+```text
+preview=true
+skip_telegram=true
+skip_email=true
+top_journal_mode=push
+min_impact_factor=10
+```
+
+邮件验证：
+
+```text
+preview=false
+skip_telegram=true
+skip_email=false
+```
+
+完整推送：
+
+```text
+preview=false
+skip_telegram=false
+skip_email=false
+```
 
 ## 11. 常见错误排查
 
@@ -432,7 +546,17 @@ Workflow 支持手动触发：
 - `OPENAI_MODEL` 是否存在。
 - 账号是否有余额或访问权限。
 
-### 11.6 单个数据源失败
+### 11.6 top 期刊过滤后内容太少
+
+检查：
+
+- `config/journals.yml` 是否包含目标期刊的全称和 PubMed 缩写别名。
+- `min_impact_factor` 是否过高。
+- `top_journal_mode=push` 是否把 arXiv、bioRxiv、medRxiv 等未知 IF 来源排除了。
+- 是否需要在 `keep_unknown_if_sources` 中临时保留预印本来源。
+- 是否应先使用 `rank` 模式观察一段时间，再切换到 `push`。
+
+### 11.7 单个数据源失败
 
 单个数据源失败不会让整条流水线失败。日报中会出现“数据源异常提示”。
 

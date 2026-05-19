@@ -1,0 +1,205 @@
+# Top journal catalog for local filtering.
+#
+# Notes:
+# - impact_factor values are conservative, manually maintained reference values for ranking/filtering only.
+# - Journal impact factors change over time and may require licensed data for exact official values.
+# - Use aliases to match PubMed/RSS journal names that may differ from the canonical name.
+
+journals:
+  - name: Nature
+    aliases: [Nature]
+    impact_factor: 50.0
+    tier: top_general
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Science
+    aliases: [Science]
+    impact_factor: 40.0
+    tier: top_general
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Cell
+    aliases: [Cell]
+    impact_factor: 40.0
+    tier: top_general
+    topics: [neuroscience, biomaterials, ai]
+    whitelist: true
+  - name: The New England Journal of Medicine
+    aliases: [New England Journal of Medicine, N Engl J Med, NEJM]
+    impact_factor: 90.0
+    tier: top_clinical
+    topics: [neuroscience, orthopedics]
+    whitelist: true
+  - name: The Lancet
+    aliases: [Lancet, The Lancet]
+    impact_factor: 90.0
+    tier: top_clinical
+    topics: [neuroscience, orthopedics]
+    whitelist: true
+  - name: JAMA
+    aliases: [JAMA, Journal of the American Medical Association]
+    impact_factor: 50.0
+    tier: top_clinical
+    topics: [neuroscience, orthopedics]
+    whitelist: true
+  - name: The BMJ
+    aliases: [BMJ, British Medical Journal]
+    impact_factor: 90.0
+    tier: top_clinical
+    topics: [neuroscience, orthopedics]
+    whitelist: true
+
+  - name: Nature Medicine
+    aliases: [Nature Medicine, Nat Med]
+    impact_factor: 50.0
+    tier: top_biomedicine
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Nature Biotechnology
+    aliases: [Nature Biotechnology, Nat Biotechnol]
+    impact_factor: 30.0
+    tier: top_biomedicine
+    topics: [biomaterials, ai]
+    whitelist: true
+  - name: Nature Biomedical Engineering
+    aliases: [Nature Biomedical Engineering, Nat Biomed Eng]
+    impact_factor: 25.0
+    tier: top_biomedicine
+    topics: [biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Nature Methods
+    aliases: [Nature Methods, Nat Methods]
+    impact_factor: 30.0
+    tier: top_methods
+    topics: [neuroscience, biomaterials, ai]
+    whitelist: true
+  - name: Nature Communications
+    aliases: [Nature Communications, Nat Commun]
+    impact_factor: 14.0
+    tier: high_impact_multidisciplinary
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Science Advances
+    aliases: [Science Advances, Sci Adv]
+    impact_factor: 13.0
+    tier: high_impact_multidisciplinary
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+  - name: Proceedings of the National Academy of Sciences
+    aliases: [PNAS, Proceedings of the National Academy of Sciences of the United States of America, Proc Natl Acad Sci U S A]
+    impact_factor: 11.0
+    tier: high_impact_multidisciplinary
+    topics: [neuroscience, biomaterials, ai, orthopedics]
+    whitelist: true
+
+  - name: Nature Neuroscience
+    aliases: [Nature Neuroscience, Nat Neurosci]
+    impact_factor: 20.0
+    tier: top_neuroscience
+    topics: [neuroscience]
+    whitelist: true
+  - name: Neuron
+    aliases: [Neuron]
+    impact_factor: 15.0
+    tier: top_neuroscience
+    topics: [neuroscience]
+    whitelist: true
+  - name: Nature Reviews Neuroscience
+    aliases: [Nature Reviews Neuroscience, Nat Rev Neurosci]
+    impact_factor: 30.0
+    tier: top_review
+    topics: [neuroscience]
+    whitelist: true
+  - name: Brain
+    aliases: [Brain]
+    impact_factor: 13.0
+    tier: top_neuroscience
+    topics: [neuroscience]
+    whitelist: true
+  - name: Annals of Neurology
+    aliases: [Annals of Neurology, Ann Neurol]
+    impact_factor: 11.0
+    tier: top_neurology
+    topics: [neuroscience]
+    whitelist: true
+  - name: Molecular Psychiatry
+    aliases: [Molecular Psychiatry, Mol Psychiatry]
+    impact_factor: 11.0
+    tier: top_neuroscience
+    topics: [neuroscience]
+    whitelist: true
+
+  - name: Advanced Materials
+    aliases: [Advanced Materials, Adv Mater]
+    impact_factor: 25.0
+    tier: top_materials
+    topics: [biomaterials]
+    whitelist: true
+  - name: Materials Today
+    aliases: [Materials Today, Mater Today]
+    impact_factor: 20.0
+    tier: top_materials
+    topics: [biomaterials]
+    whitelist: true
+  - name: Biomaterials
+    aliases: [Biomaterials]
+    impact_factor: 12.0
+    tier: top_biomaterials
+    topics: [biomaterials, orthopedics]
+    whitelist: true
+  - name: Bioactive Materials
+    aliases: [Bioactive Materials, Bioact Mater]
+    impact_factor: 15.0
+    tier: top_biomaterials
+    topics: [biomaterials, orthopedics]
+    whitelist: true
+  - name: Advanced Functional Materials
+    aliases: [Advanced Functional Materials, Adv Funct Mater]
+    impact_factor: 18.0
+    tier: top_materials
+    topics: [biomaterials]
+    whitelist: true
+  - name: ACS Nano
+    aliases: [ACS Nano]
+    impact_factor: 15.0
+    tier: top_materials
+    topics: [biomaterials]
+    whitelist: true
+
+  - name: Nature Machine Intelligence
+    aliases: [Nature Machine Intelligence, Nat Mach Intell]
+    impact_factor: 20.0
+    tier: top_ai
+    topics: [ai]
+    whitelist: true
+  - name: npj Digital Medicine
+    aliases: [npj Digital Medicine, NPJ Digital Medicine]
+    impact_factor: 12.0
+    tier: top_digital_health
+    topics: [ai, neuroscience]
+    whitelist: true
+  - name: The Lancet Digital Health
+    aliases: [Lancet Digital Health, The Lancet Digital Health]
+    impact_factor: 30.0
+    tier: top_digital_health
+    topics: [ai, neuroscience]
+    whitelist: true
+  - name: IEEE Transactions on Pattern Analysis and Machine Intelligence
+    aliases: [IEEE Transactions on Pattern Analysis and Machine Intelligence, IEEE Trans Pattern Anal Mach Intell, IEEE TPAMI]
+    impact_factor: 20.0
+    tier: top_ai
+    topics: [ai]
+    whitelist: true
+
+  - name: Bone Research
+    aliases: [Bone Research, Bone Res]
+    impact_factor: 12.0
+    tier: top_orthopedics
+    topics: [orthopedics, biomaterials]
+    whitelist: true
+  - name: The Lancet Rheumatology
+    aliases: [Lancet Rheumatology, The Lancet Rheumatology]
+    impact_factor: 20.0
+    tier: top_orthopedics
+    topics: [orthopedics]
+    whitelist: true
