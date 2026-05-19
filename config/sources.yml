@@ -1,0 +1,48 @@
+sources:
+  pubmed:
+    enabled: true
+    retmax_per_topic: 20
+    request_delay_seconds: 0.34
+    email_env: NCBI_EMAIL
+    api_key_env: NCBI_API_KEY
+
+  arxiv:
+    enabled: true
+    max_results_per_topic: 20
+    request_delay_seconds: 3.0
+
+  biorxiv:
+    enabled: true
+    max_results: 100
+    request_delay_seconds: 1.0
+
+  medrxiv:
+    enabled: true
+    max_results: 100
+    request_delay_seconds: 1.0
+
+  rss:
+    enabled: true
+    max_entries_per_feed: 20
+    feeds:
+      - name: ScienceDaily Neuroscience
+        url: https://www.sciencedaily.com/rss/mind_brain/neuroscience.xml
+        topics: [neuroscience]
+      - name: ScienceDaily Materials Science
+        url: https://www.sciencedaily.com/rss/matter_energy/materials_science.xml
+        topics: [biomaterials]
+      - name: ScienceDaily Artificial Intelligence
+        url: https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml
+        topics: [ai]
+      - name: ScienceDaily Bones and Orthopedics
+        url: https://www.sciencedaily.com/rss/health_medicine/bones_and_orthopedics.xml
+        topics: [orthopedics]
+      - name: MIT News Artificial Intelligence
+        url: https://news.mit.edu/rss/topic/artificial-intelligence2
+        topics: [ai]
+      - name: Nature Latest Research
+        url: https://www.nature.com/nature.rss
+        topics: [neuroscience, biomaterials, ai, orthopedics]
+      - name: NIH News Releases
+        url: https://www.nih.gov/news-events/news-releases/feed.xml
+        topics: [neuroscience, biomaterials, orthopedics]

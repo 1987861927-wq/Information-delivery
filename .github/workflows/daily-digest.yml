@@ -1,0 +1,127 @@
+name: Daily Research Digest
+
+on:
+  schedule:
+    # GitHub Actions 使用 UTC；00:00 UTC 约等于北京时间 08:00。
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      digest_date:
+        description: "日报日期，格式 YYYY-MM-DD；留空则使用配置时区当天"
+        required: false
+        type: string
+      topics:
+        description: "可选主题 slug，空格分隔，例如 ai neuroscience"
+        required: false
+        type: string
+      max_items:
+        description: "每个主题最多条目数；留空使用 config/topics.yml"
+        required: false
+        type: string
+      days_back:
+        description: "向前抓取天数；留空使用 config/topics.yml"
+        required: false
+        type: string
+      skip_telegram:
+        description: "跳过 Telegram 推送"
+        required: false
+        default: false
+        type: boolean
+      skip_email:
+        description: "跳过邮件推送"
+        required: false
+        default: false
+        type: boolean
+      preview:
+        description: "只生成预览和 artifact，不发送推送"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_TO: ${{ secrets.SMTP_TO }}
+      SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
+      SMTP_USE_SSL: ${{ secrets.SMTP_USE_SSL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+      OPENAI_TIMEOUT_SECONDS: ${{ secrets.OPENAI_TIMEOUT_SECONDS }}
+      NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
+      NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+      DIGEST_TIMEZONE: Asia/Shanghai
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-automation.txt
+
+      - name: Build CLI arguments
+        id: args
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ -n "${{ inputs.digest_date }}" ]; then
+            ARGS="$ARGS --date '${{ inputs.digest_date }}'"
+          fi
+          if [ -n "${{ inputs.topics }}" ]; then
+            ARGS="$ARGS --topics ${{ inputs.topics }}"
+          fi
+          if [ -n "${{ inputs.max_items }}" ]; then
+            ARGS="$ARGS --max-items '${{ inputs.max_items }}'"
+          fi
+          if [ -n "${{ inputs.days_back }}" ]; then
+            ARGS="$ARGS --days-back '${{ inputs.days_back }}'"
+          fi
+          if [ "${{ inputs.skip_telegram }}" = "true" ]; then
+            ARGS="$ARGS --skip-telegram"
+          fi
+          if [ "${{ inputs.skip_email }}" = "true" ]; then
+            ARGS="$ARGS --skip-email"
+          fi
+          if [ "${{ inputs.preview }}" = "true" ]; then
+            ARGS="$ARGS --preview"
+          fi
+          echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and push digest
+        run: |
+          set -euo pipefail
+          python scripts/daily_digest.py ${{ steps.args.outputs.args }} --verbose
+
+      - name: List generated digests
+        if: always()
+        run: |
+          find data/digests -type f -maxdepth 3 | sort || true
+
+      - name: Upload digest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-digest-${{ github.run_id }}
+          path: |
+            data/digests/**/*.md
+            data/digests/**/*.html
+            data/digests/**/*.json
+          if-no-files-found: warn
