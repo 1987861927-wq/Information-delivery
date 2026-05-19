@@ -6,7 +6,7 @@
 
 每天定时完成：
 
-1. 抓取 PubMed、arXiv、RSS、bioRxiv、medRxiv。
+1. 抓取 PubMed、arXiv、RSS、bioRxiv、medRxiv、GitHub、NIH RePORTER。
 2. 按神经科学、生物材料、人工智能、骨科四个主题筛选。
 3. 去重、排序，并按主题选出高相关内容。
 4. 生成中文摘要、关键结论、方法或技术亮点、科研或临床价值判断。
@@ -28,7 +28,7 @@
 ```text
 research-intelligence-ios/
 ├── automation/                         # 自动化流水线核心模块
-│   ├── collectors/                      # PubMed、arXiv、RSS、bioRxiv、medRxiv 抓取器
+│   ├── collectors/                      # PubMed、arXiv、RSS、bioRxiv、medRxiv、GitHub、NIH RePORTER 抓取器
 │   ├── notifiers/                       # Telegram 和邮件发送
 │   ├── renderers/                       # Markdown/HTML/Telegram 预览渲染
 │   ├── config_loader.py                 # YAML 和 .env 配置读取
@@ -85,6 +85,8 @@ config/sources.yml
 - RSS：使用 feedparser 解析多个 RSS Feed。
 - bioRxiv：使用 bioRxiv API。
 - medRxiv：使用 medRxiv API。
+- GitHub：使用 GitHub REST API 搜索相关 repositories，并可读取 latest release。
+- NIH RePORTER：使用 NIH RePORTER API 搜索资助项目和 grant。
 
 说明：
 
@@ -92,6 +94,8 @@ config/sources.yml
 - arXiv 官方 API 对请求频率敏感，配置中保留了请求延迟。
 - bioRxiv/medRxiv API 偶尔可能超时或返回不稳定，单源失败不会导致整个日报失败，会在日报中写入异常提示。
 - RSS 源可以自由增加，只需要填写 `name`、`url`、`topics`。
+- GitHub 可选配置 `GITHUB_TOKEN` 提高 REST API 限额；未配置时仍可低限额访问公开仓库搜索。
+- NIH RePORTER 当前不需要 token；可在 `config/sources.yml` 中按财政年度、机构、PI、关键词缩小范围。
 
 ### 3.1 top 期刊和 IF 筛选
 
@@ -404,6 +408,14 @@ NCBI_EMAIL
 NCBI_API_KEY
 ```
 
+### 可选 GitHub 配置
+
+```text
+GITHUB_TOKEN
+```
+
+`GITHUB_TOKEN` 用于提高 GitHub REST API rate limit；不配置时 GitHub connector 仍会用未认证低限额请求公开仓库。
+
 如果暂时没有 LLM Key，可以不配置 `OPENAI_API_KEY`，系统会自动使用规则摘要。
 
 如果暂时只想用 Telegram，可以不配置 SMTP；如果只想用邮件，可以在手动触发时勾选跳过 Telegram。
@@ -546,7 +558,17 @@ skip_email=false
 - `OPENAI_MODEL` 是否存在。
 - 账号是否有余额或访问权限。
 
-### 11.6 top 期刊过滤后内容太少
+### 11.6 GitHub 或 NIH RePORTER 内容太少
+
+检查：
+
+- `config/sources.yml` 中 `github.enabled` 和 `nih_reporter.enabled` 是否为 `true`。
+- GitHub 是否触发未认证 API 限流；需要时配置 `GITHUB_TOKEN`。
+- `github.min_score`、`github.min_stars`、`github.stale_days` 是否过严。
+- `nih_reporter.min_score`、`nih_reporter.fiscal_years`、`nih_reporter.agencies`、`nih_reporter.organizations`、`nih_reporter.pis` 是否限制过窄。
+- 新来源结果会先进入统一 `Article` schema，再经过主题匹配、去重、排序和 Telegram 预览截断。
+
+### 11.7 top 期刊过滤后内容太少
 
 检查：
 
@@ -556,7 +578,7 @@ skip_email=false
 - 是否需要在 `keep_unknown_if_sources` 中临时保留预印本来源。
 - 是否应先使用 `rank` 模式观察一段时间，再切换到 `push`。
 
-### 11.7 单个数据源失败
+### 11.8 单个数据源失败
 
 单个数据源失败不会让整条流水线失败。日报中会出现“数据源异常提示”。
 

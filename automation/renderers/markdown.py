@@ -65,10 +65,15 @@ def render_telegram_preview(digest: Digest, max_items: int = 8) -> str:
             count += 1
             summary = item.summary
             conclusion = _first_non_empty(summary.key_conclusions) or "暂无明确关键结论，建议打开原文核对。"
-            lines.append(f"{count}. {item.article.title}")
-            journal_badge = _journal_badge(item.article)
+            article = item.article
+            lines.append(f"{count}. {article.title}")
+            journal_badge = _journal_badge(article)
+            metadata_line = _metadata_line(article)
             if journal_badge:
                 lines.append(f"   期刊标记：{journal_badge}")
+            if metadata_line:
+                lines.append(f"   关键元数据：{_truncate_line(metadata_line, 150)}")
+            lines.append(f"   评分：relevance={article.relevance_score:g}；quality={article.quality_score:g}")
             lines.append(f"   精炼总结：{_truncate_line(summary.brief, 150)}")
             lines.append(f"   关键结论：{_truncate_line(conclusion, 130)}")
             lines.append(f"   价值判断：{_truncate_line(summary.value_judgement, 120)}")
@@ -104,11 +109,14 @@ def _render_item(index: int, item: DigestItem) -> list[str]:
     summary = item.summary
     authors = safe_join(article.authors, limit=4)
     journal_badge = _journal_badge(article)
+    metadata_line = _metadata_line(article)
     lines = [
         f"### {index}. {article.title}",
         "",
         f"- 来源：{article.source}{' / ' + article.journal if article.journal else ''}",
         f"- 期刊标记：{journal_badge or '未匹配 top 期刊 IF'}",
+        f"- 关键元数据：{metadata_line or '无'}",
+        f"- 评分：relevance={article.relevance_score:g}；quality={article.quality_score:g}",
         f"- 发布时间：{format_date_time(article.published_at)}",
         f"- 作者：{authors or '未知'}",
         f"- 原文链接：{article.url}",
@@ -131,6 +139,30 @@ def _render_item(index: int, item: DigestItem) -> list[str]:
         ]
     )
     return lines
+
+
+def _metadata_line(article) -> str:
+    metadata = article.metadata or {}
+    if article.source == "GitHub":
+        parts = []
+        for key, label in (("stars", "stars"), ("forks", "forks"), ("watchers", "watchers"), ("open_issues", "open issues")):
+            if metadata.get(key) is not None:
+                parts.append(f"{label}={metadata.get(key)}")
+        if metadata.get("language"):
+            parts.append(f"language={metadata.get('language')}")
+        if metadata.get("hotness_score") is not None:
+            parts.append(f"hotness={metadata.get('hotness_score')}")
+        return "; ".join(parts)
+    if article.source == "NIH RePORTER":
+        parts = []
+        for key, label in (("project_num", "project"), ("agency", "agency"), ("fiscal_year", "FY"), ("award_amount", "amount"), ("organization", "org"), ("importance_score", "importance")):
+            if metadata.get(key) is not None:
+                parts.append(f"{label}={metadata.get(key)}")
+        pi = metadata.get("principal_investigators") or []
+        if pi:
+            parts.append(f"PI={', '.join(str(item) for item in pi[:3])}")
+        return "; ".join(parts)
+    return ""
 
 
 def _journal_badge(article) -> str:

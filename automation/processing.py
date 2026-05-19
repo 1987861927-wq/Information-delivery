@@ -9,6 +9,8 @@ from automation.utils import keyword_count
 
 SOURCE_WEIGHTS = {
     "PubMed": 1.0,
+    "GitHub": 0.88,
+    "NIH RePORTER": 0.92,
     "arXiv": 0.82,
     "bioRxiv": 0.78,
     "medRxiv": 0.80,
@@ -122,6 +124,12 @@ def compute_quality_score(article: Article) -> float:
         score += min(article.journal_impact_factor / 100.0, 0.45)
     if article.journal_is_whitelisted:
         score += 0.05
+    source_signal = article.metadata.get("hotness_score") or article.metadata.get("importance_score")
+    if source_signal is not None:
+        try:
+            score += min(float(source_signal) / 10.0, 0.6)
+        except (TypeError, ValueError):
+            pass
     if article.published_at:
         days_old = max((datetime.now(timezone.utc) - article.published_at).days, 0)
         score += max(0.0, 0.25 - min(days_old, 30) * 0.01)

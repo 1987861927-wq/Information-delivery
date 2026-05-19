@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 
 from automation.models import Digest
-from automation.renderers.markdown import _journal_badge, _pick_highlights
+from automation.renderers.markdown import _journal_badge, _metadata_line, _pick_highlights
 from automation.utils import format_date_time, safe_join
 
 
@@ -56,10 +56,14 @@ ul{padding-left:20px}.warning{background:#fff8e1;border-color:#ffe3a3}.footer{co
             journal_badge = _journal_badge(article)
             if journal_badge:
                 body.append(f"｜{html.escape(journal_badge)}")
+            metadata_line = _metadata_line(article)
+            if metadata_line:
+                body.append(f"｜{html.escape(metadata_line)}")
             authors = safe_join(article.authors, limit=4)
             if authors:
                 body.append(f"｜作者：{html.escape(authors)}")
             body.append("</p>")
+            body.append(f"<p><strong>评分：</strong>relevance={article.relevance_score:g}；quality={article.quality_score:g}</p>")
             body.append(f"<p><strong>简短中文摘要：</strong>{html.escape(summary.brief)}</p>")
             body.append("<p><strong>关键结论：</strong></p><ul>")
             for conclusion in summary.key_conclusions:

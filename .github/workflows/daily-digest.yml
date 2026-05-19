@@ -80,6 +80,7 @@ jobs:
       OPENAI_TIMEOUT_SECONDS: ${{ secrets.OPENAI_TIMEOUT_SECONDS }}
       NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
       NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       DIGEST_TIMEZONE: Asia/Shanghai
 
     steps:

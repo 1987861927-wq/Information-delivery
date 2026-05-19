@@ -13,7 +13,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from automation.collectors import collect_arxiv, collect_biorxiv, collect_medrxiv, collect_pubmed, collect_rss
+from automation.collectors import (
+    collect_arxiv,
+    collect_biorxiv,
+    collect_github,
+    collect_medrxiv,
+    collect_nih_reporter,
+    collect_pubmed,
+    collect_rss,
+)
 from automation.config_loader import (
     filter_topics,
     load_environment,
@@ -193,6 +201,8 @@ def collect_all_sources(
         ("RSS", collect_rss, sources_config.get("rss", {})),
         ("bioRxiv", collect_biorxiv, sources_config.get("biorxiv", {})),
         ("medRxiv", collect_medrxiv, sources_config.get("medrxiv", {})),
+        ("GitHub", collect_github, sources_config.get("github", {})),
+        ("NIH RePORTER", collect_nih_reporter, sources_config.get("nih_reporter", {})),
     ]
     articles: list[Article] = []
     errors: list[SourceError] = []
@@ -249,6 +259,36 @@ def _sample_articles(target_date: date) -> list[Article]:
             journal="bioRxiv",
             relevance_score=4,
             quality_score=0.9,
+        ),
+        Article(
+            id="sample-github-001",
+            source="GitHub",
+            source_id="sample/biomedical-llm-toolkit",
+            title="GitHub: sample/biomedical-llm-toolkit",
+            abstract="Open-source toolkit for biomedical literature triage. GitHub 元数据：stars=1280, forks=120, watchers=1280, open_issues=18, language=Python. Topics: biomedical-nlp, llm, literature-triage. Latest release: v0.3.0.",
+            url="https://github.com/sample/biomedical-llm-toolkit",
+            published_at=datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc),
+            authors=["sample"],
+            topics=["ai"],
+            journal="GitHub Repository",
+            relevance_score=6,
+            quality_score=1.1,
+            metadata={"stars": 1280, "forks": 120, "language": "Python", "hotness_score": 7.2},
+        ),
+        Article(
+            id="sample-nih-001",
+            source="NIH RePORTER",
+            source_id="r01-sample-0001",
+            title="NIH Grant: AI-enabled biomarkers for neurodegeneration",
+            abstract="NIH-funded project developing AI-enabled biomarkers for neurodegeneration. NIH RePORTER 元数据：project=R01-SAMPLE-0001, agency=NIA, fiscal_year=2026, award_amount=750000, organization=Sample University, PI=Jane Doe.",
+            url="https://reporter.nih.gov/project-details/R01-SAMPLE-0001",
+            published_at=datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc),
+            authors=["Jane Doe"],
+            topics=["neuroscience", "ai"],
+            journal="NIH RePORTER Project",
+            relevance_score=6,
+            quality_score=1.2,
+            metadata={"project_num": "R01-SAMPLE-0001", "agency": "NIA", "fiscal_year": 2026, "award_amount": 750000, "importance_score": 7.8},
         ),
     ]
 

@@ -55,6 +55,7 @@ class Article:
     journal_filter_reason: str | None = None
     relevance_score: float = 0.0
     quality_score: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def identity_key(self) -> str:
         if self.doi:

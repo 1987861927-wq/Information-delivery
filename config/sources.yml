@@ -34,6 +34,46 @@ sources:
     max_results: 100
     request_delay_seconds: 1.0
 
+  github:
+    enabled: true
+    token_env: GITHUB_TOKEN
+    max_results_per_topic: 6
+    per_page: 20
+    max_pages: 1
+    min_score: 3.0
+    min_stars: 10
+    stale_days: 730
+    request_delay_seconds: 1.0
+    sort: updated
+    order: desc
+    include_latest_release: true
+    qualifiers:
+      - archived:false
+    language_boosts:
+      - python
+      - r
+      - jupyter notebook
+      - swift
+    keywords:
+      - biomedical
+      - medical
+      - research
+      - science
+      - open source
+
+  nih_reporter:
+    enabled: true
+    max_results_per_topic: 6
+    limit: 25
+    max_pages: 1
+    min_score: 2.0
+    request_delay_seconds: 1.0
+    keywords:
+      - biomedical
+      - translational
+      - clinical
+      - computational
+
   rss:
     enabled: true
     max_entries_per_feed: 20
