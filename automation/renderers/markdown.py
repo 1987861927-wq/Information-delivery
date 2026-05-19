@@ -51,9 +51,9 @@ def render_telegram_preview(digest: Digest, max_items: int = 8) -> str:
     lines: list[str] = []
     lines.append(f"📚 {digest.title}｜{digest.date}")
     total = sum(len(items) for items in digest.items_by_topic.values())
-    lines.append(f"今日筛选：{total} 条")
+    lines.append(f"今日筛选：{total} 条；以下为手机端精炼中文要点。")
     if digest.source_errors:
-        lines.append(f"⚠️ 数据源异常：{len(digest.source_errors)} 个，详见邮件或 Markdown 日报")
+        lines.append(f"⚠️ 数据源异常：{len(digest.source_errors)} 个，详见 Markdown 日报附件或 GitHub Actions artifact。")
     lines.append("")
     count = 0
     for topic in digest.topics:
@@ -63,16 +63,37 @@ def render_telegram_preview(digest: Digest, max_items: int = 8) -> str:
         lines.append(f"【{topic.name}】")
         for item in items[:2]:
             count += 1
+            summary = item.summary
+            conclusion = _first_non_empty(summary.key_conclusions) or "暂无明确关键结论，建议打开原文核对。"
             lines.append(f"{count}. {item.article.title}")
-            lines.append(f"   {item.summary.brief[:180]}{'…' if len(item.summary.brief) > 180 else ''}")
-            lines.append(f"   {item.article.url}")
+            lines.append(f"   精炼总结：{_truncate_line(summary.brief, 150)}")
+            lines.append(f"   关键结论：{_truncate_line(conclusion, 130)}")
+            lines.append(f"   价值判断：{_truncate_line(summary.value_judgement, 120)}")
+            lines.append(f"   链接：{item.article.url}")
             if count >= max_items:
                 lines.append("")
-                lines.append("完整日报请查看邮件或 GitHub Actions artifact。")
+                lines.append("完整 Markdown 日报会作为 Telegram 附件发送；也可在 GitHub Actions artifact 中下载。")
                 return "\n".join(lines)
         lines.append("")
-    lines.append("完整日报请查看邮件或 GitHub Actions artifact。")
+    lines.append("完整 Markdown 日报会作为 Telegram 附件发送；也可在 GitHub Actions artifact 中下载。")
     return "\n".join(lines)
+
+
+
+def _truncate_line(text: str | None, limit: int) -> str:
+    cleaned = " ".join((text or "").split())
+    if not cleaned:
+        return "暂无。"
+    return f"{cleaned[:limit]}…" if len(cleaned) > limit else cleaned
+
+
+
+def _first_non_empty(items: list[str]) -> str | None:
+    for item in items:
+        cleaned = " ".join(item.split())
+        if cleaned:
+            return cleaned
+    return None
 
 
 def _render_item(index: int, item: DigestItem) -> list[str]:

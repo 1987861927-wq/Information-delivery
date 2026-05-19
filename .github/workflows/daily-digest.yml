@@ -38,6 +38,10 @@ on:
         default: false
         type: boolean
 
+env:
+  # Proactively opt JavaScript actions into Node.js 24 to avoid GitHub-hosted runner Node.js 20 deprecation warnings.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   digest:
     runs-on: ubuntu-latest
