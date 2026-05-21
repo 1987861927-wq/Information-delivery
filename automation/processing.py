@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from automation.models import Article, TopicConfig
 from automation.utils import keyword_count
 
+NIH_SOURCE = "NIH RePORTER"
+SOURCE_CONFIG_BY_NAME = {
+    "NIH RePORTER": "nih_reporter",
+    "GitHub": "github",
+    "PubMed": "pubmed",
+    "arXiv": "arxiv",
+    "bioRxiv": "biorxiv",
+    "medRxiv": "medrxiv",
+    "RSS": "rss",
+}
 SOURCE_WEIGHTS = {
     "PubMed": 1.0,
     "GitHub": 0.88,
-    "NIH RePORTER": 0.92,
+    NIH_SOURCE: 0.5,
     "arXiv": 0.82,
     "bioRxiv": 0.78,
     "medRxiv": 0.80,
@@ -148,6 +158,90 @@ def dedupe_articles(articles: list[Article]) -> list[Article]:
     return result
 
 
+def filter_articles_by_source_frequency(
+    articles: list[Article],
+    sources_config: dict[str, Any],
+    digest_date: date,
+    include_weekly: bool = False,
+) -> list[Article]:
+    result: list[Article] = []
+    for article in articles:
+        config = _source_config_for_article(article, sources_config)
+        frequency = str(config.get("frequency", "daily") or "daily").strip().lower()
+        if frequency == "weekly" and not include_weekly:
+            continue
+        if frequency == "weekly":
+            weekly_day = int(config.get("weekly_day", 0) or 0)
+            if digest_date.weekday() != weekly_day:
+                continue
+            article.metadata["display_role"] = config.get("display_role", "weekly")
+            article.metadata["frequency"] = "weekly"
+        multiplier = float(config.get("score_multiplier", 1.0) or 1.0)
+        if multiplier != 1.0:
+            article.metadata.setdefault("raw_relevance_score", article.relevance_score)
+            article.metadata.setdefault("raw_quality_score", article.quality_score)
+            article.relevance_score = round(article.relevance_score * multiplier, 3)
+            article.quality_score = round(article.quality_score * multiplier, 3)
+        result.append(article)
+    return result
+
+
+def _source_config_for_article(article: Article, sources_config: dict[str, Any]) -> dict[str, Any]:
+    key = SOURCE_CONFIG_BY_NAME.get(article.source, article.source.lower().replace(" ", "_"))
+    raw = sources_config.get(key, {})
+    return raw if isinstance(raw, dict) else {}
+
+
+def _is_supplemental_article(article: Article) -> bool:
+    if article.source == NIH_SOURCE:
+        return True
+    role = str(article.metadata.get("display_role") or "").strip().lower()
+    return role in {"supplemental", "weekly"}
+
+
+def _article_sort_key(article: Article) -> tuple[int, float, float, float, float]:
+    return (
+        0 if _is_supplemental_article(article) else 1,
+        article.relevance_score,
+        article.quality_score,
+        article.journal_impact_factor or 0,
+        article.published_at.timestamp() if article.published_at else 0,
+    )
+
+
+
+def _select_diverse_articles(sorted_articles: list[Article], limit: int) -> list[Article]:
+    if limit <= 0:
+        return []
+    if len(sorted_articles) <= limit:
+        return list(sorted_articles)
+
+    selected: list[Article] = []
+    selected_keys: set[str] = set()
+    seen_sources: set[str] = set()
+
+    for article in sorted_articles:
+        if article.source in seen_sources:
+            continue
+        selected.append(article)
+        selected_keys.add(article.identity_key())
+        seen_sources.add(article.source)
+        if len(selected) >= limit:
+            return selected
+
+    for article in sorted_articles:
+        key = article.identity_key()
+        if key in selected_keys:
+            continue
+        selected.append(article)
+        selected_keys.add(key)
+        if len(selected) >= limit:
+            break
+
+    return selected
+
+
+
 def select_items_by_topic(
     articles: list[Article],
     topics: list[TopicConfig],
@@ -158,16 +252,8 @@ def select_items_by_topic(
     for topic in topics:
         limit = override_limit or topic.max_items or default_limit
         topic_articles = [article for article in articles if topic.slug in article.topics]
-        topic_articles.sort(
-            key=lambda article: (
-                article.relevance_score,
-                article.quality_score,
-                article.journal_impact_factor or 0,
-                article.published_at.timestamp() if article.published_at else 0,
-            ),
-            reverse=True,
-        )
-        selected[topic.slug] = topic_articles[:limit]
+        topic_articles.sort(key=_article_sort_key, reverse=True)
+        selected[topic.slug] = _select_diverse_articles(topic_articles, limit)
     return selected
 
 

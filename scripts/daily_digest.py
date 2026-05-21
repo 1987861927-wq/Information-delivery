@@ -38,6 +38,7 @@ from automation.processing import (
     build_pubmed_journal_query,
     compute_quality_score,
     dedupe_articles,
+    filter_articles_by_source_frequency,
     normalize_top_journal_filter_mode,
     select_items_by_topic,
 )
@@ -120,7 +121,12 @@ def main() -> int:
             len(articles),
         )
         articles = dedupe_articles(articles)
-        LOGGER.info("去重和主题匹配完成 articles=%s", len(articles))
+        articles = filter_articles_by_source_frequency(
+            articles=articles,
+            sources_config=sources_config,
+            digest_date=target_date,
+        )
+        LOGGER.info("去重、来源频率过滤和主题匹配完成 articles=%s", len(articles))
         selected = select_items_by_topic(
             articles=articles,
             topics=topics,

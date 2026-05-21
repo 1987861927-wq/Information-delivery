@@ -32,6 +32,8 @@ def run(command: list[str]) -> None:
 
 
 def main() -> int:
+    run_selection_diversity_checks()
+    run_nih_weekly_policy_checks()
     run_mock_collector_checks()
     run([sys.executable, "scripts/daily_digest.py", "--no-fetch", "--preview", "--skip-telegram", "--skip-email", "--date", "2026-01-01"])
     run(
@@ -56,11 +58,152 @@ def main() -> int:
         if not path.exists():
             raise SystemExit(f"自检失败：未生成 {path}")
     markdown = expected.read_text(encoding="utf-8")
-    for needle in ("GitHub: sample/biomedical-llm-toolkit", "NIH Grant: AI-enabled biomarkers for neurodegeneration", "关键元数据", "评分："):
+    for needle in ("GitHub: sample/biomedical-llm-toolkit", "关键元数据", "评分："):
         if needle not in markdown:
             raise SystemExit(f"自检失败：日报缺少 {needle}")
-    print(f"自检通过：已生成 {expected} 和 {expected_top_journal}，并包含 GitHub/NIH 样例")
+    if "NIH Grant: AI-enabled biomarkers for neurodegeneration" in markdown:
+        raise SystemExit("自检失败：NIH RePORTER weekly 来源不应出现在普通日报样例中")
+    print(f"自检通过：已生成 {expected} 和 {expected_top_journal}，GitHub 样例存在且 NIH 周报来源未进入普通日报")
     return 0
+
+
+def run_selection_diversity_checks() -> None:
+    from datetime import datetime, timezone
+
+    from automation.models import Article, TopicConfig
+    from automation.processing import select_items_by_topic
+
+    topic = TopicConfig(
+        slug="ai",
+        name="人工智能",
+        description="AI for Science",
+        keywords=["artificial intelligence", "biomedical"],
+    )
+    published_at = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    articles = [
+        Article(
+            id="nih-1",
+            source="NIH RePORTER",
+            title="NIH Grant: high-priority AI biomarker program",
+            url="https://reporter.nih.gov/project-details/nih-1",
+            abstract="High scoring NIH project.",
+            published_at=published_at,
+            topics=["ai"],
+            relevance_score=9.0,
+            quality_score=2.0,
+        ),
+        Article(
+            id="nih-2",
+            source="NIH RePORTER",
+            title="NIH Grant: follow-up AI biomarker program",
+            url="https://reporter.nih.gov/project-details/nih-2",
+            abstract="Second high scoring NIH project.",
+            published_at=published_at,
+            topics=["ai"],
+            relevance_score=8.8,
+            quality_score=1.9,
+        ),
+        Article(
+            id="pubmed-1",
+            source="PubMed",
+            title="Clinical validation study for AI biomarkers",
+            url="https://pubmed.ncbi.nlm.nih.gov/pubmed-1",
+            abstract="PubMed article with slightly lower total score.",
+            published_at=published_at,
+            topics=["ai"],
+            relevance_score=7.5,
+            quality_score=1.8,
+        ),
+    ]
+
+    selected = select_items_by_topic(articles=articles, topics=[topic], default_limit=2)
+    selected_sources = [article.source for article in selected["ai"]]
+    if selected_sources != ["PubMed", "NIH RePORTER"]:
+        raise SystemExit(f"自检失败：来源多样性选择异常，实际来源顺序为 {selected_sources}")
+
+    fallback_selected = select_items_by_topic(articles=articles[:2], topics=[topic], default_limit=2)
+    fallback_sources = [article.source for article in fallback_selected["ai"]]
+    if fallback_sources != ["NIH RePORTER", "NIH RePORTER"]:
+        raise SystemExit(f"自检失败：单一来源回退异常，实际来源顺序为 {fallback_sources}")
+
+    print("自检通过：最终选取阶段可优先保留不同来源，并在单一来源场景正常回退")
+
+
+
+def run_nih_weekly_policy_checks() -> None:
+    from datetime import datetime, timezone
+
+    from automation.models import Article, TopicConfig
+    from automation.processing import filter_articles_by_source_frequency, select_items_by_topic
+    from automation.renderers.markdown import _pick_highlights
+
+    topic = TopicConfig(
+        slug="ai",
+        name="人工智能",
+        description="AI for Science",
+        keywords=["artificial intelligence", "biomedical"],
+    )
+    published_at = datetime(2026, 1, 5, tzinfo=timezone.utc)
+    articles = [
+        Article(
+            id="nih-1",
+            source="NIH RePORTER",
+            title="NIH Grant: high-priority AI biomarker program",
+            url="https://reporter.nih.gov/project-details/nih-1",
+            abstract="High scoring NIH project.",
+            published_at=published_at,
+            topics=["ai"],
+            relevance_score=9.0,
+            quality_score=2.0,
+        ),
+        Article(
+            id="pubmed-1",
+            source="PubMed",
+            title="Clinical validation study for AI biomarkers",
+            url="https://pubmed.ncbi.nlm.nih.gov/pubmed-1",
+            abstract="PubMed article with lower raw score.",
+            published_at=published_at,
+            topics=["ai"],
+            relevance_score=3.0,
+            quality_score=1.8,
+        ),
+    ]
+    sources_config = {"nih_reporter": {"frequency": "weekly", "weekly_day": 0, "score_multiplier": 0.4}}
+
+    daily_articles = filter_articles_by_source_frequency(articles, sources_config, digest_date=published_at.date())
+    if any(article.source == "NIH RePORTER" for article in daily_articles):
+        raise SystemExit("自检失败：NIH RePORTER 配置为 weekly 后不应进入非周报日期")
+
+    weekly_articles = filter_articles_by_source_frequency(articles, sources_config, digest_date=published_at.date(), include_weekly=True)
+    weekly_nih = [article for article in weekly_articles if article.source == "NIH RePORTER"]
+    if len(weekly_nih) != 1 or weekly_nih[0].relevance_score != 3.6:
+        raise SystemExit(f"自检失败：NIH 周报降权异常，实际 NIH 条目={weekly_nih}")
+
+    selected = select_items_by_topic(weekly_articles, [topic], default_limit=2)
+    if selected["ai"][0].source != "PubMed":
+        raise SystemExit("自检失败：NIH 周报条目降权后不应压过普通论文来源")
+
+    class _Summary:
+        brief = "摘要"
+        key_conclusions: list[str] = []
+        value_judgement = "价值"
+        method_highlights = "方法"
+        limitations = "局限"
+
+    from automation.models import Digest, DigestItem
+    digest = Digest(
+        date=published_at.date().isoformat(),
+        title="测试日报",
+        topics=[topic],
+        items_by_topic={"ai": [DigestItem(article=article, summary=_Summary()) for article in selected["ai"]]},
+        source_errors=[],
+        generated_at=published_at,
+    )
+    if any(item.article.source == "NIH RePORTER" for item in _pick_highlights(digest)):
+        raise SystemExit("自检失败：NIH RePORTER 周报补充条目不应进入今日重点")
+
+    print("自检通过：NIH RePORTER 默认改为周报来源，非周报日期跳过，周报中降权且不进入今日重点")
+
 
 
 def run_mock_collector_checks() -> None:

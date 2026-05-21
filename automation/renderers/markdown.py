@@ -178,10 +178,26 @@ def _journal_badge(article) -> str:
     return "；".join(parts)
 
 
+def _is_highlight_excluded(item: DigestItem) -> bool:
+    article = item.article
+    if article.source == "NIH RePORTER":
+        return True
+    role = str((article.metadata or {}).get("display_role") or "").strip().lower()
+    return role in {"supplemental", "weekly"}
+
+
+def _highlight_sort_key(item: DigestItem) -> tuple[int, float, float, float]:
+    article = item.article
+    return (
+        0 if _is_highlight_excluded(item) else 1,
+        article.relevance_score,
+        article.quality_score,
+        article.journal_impact_factor or 0,
+    )
+
+
 def _pick_highlights(digest: Digest) -> list[DigestItem]:
     all_items = [item for items in digest.items_by_topic.values() for item in items]
-    all_items.sort(
-        key=lambda item: (item.article.relevance_score, item.article.quality_score, item.article.journal_impact_factor or 0),
-        reverse=True,
-    )
-    return all_items[:3]
+    primary_items = [item for item in all_items if not _is_highlight_excluded(item)]
+    primary_items.sort(key=_highlight_sort_key, reverse=True)
+    return primary_items[:3]

@@ -63,6 +63,11 @@ sources:
 
   nih_reporter:
     enabled: true
+    # NIH RePORTER 作为资助趋势/方向观察来源，默认不进入每日混排；每周一进入一次周报补充。
+    frequency: weekly
+    weekly_day: 0
+    display_role: weekly
+    score_multiplier: 0.4
     max_results_per_topic: 6
     limit: 25
     max_pages: 1
